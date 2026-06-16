@@ -1,6 +1,7 @@
 import java.util.HashSet;
 import java.util.Scanner;
 import java.util.Set;
+import java.io.File;
 
 public class Main {
 
@@ -25,7 +26,23 @@ public class Main {
 
                 if (builtins.contains(cmd)) {
                     System.out.println(cmd + " is a shell builtin");
-                } else {
+                    continue;
+                }
+
+                String[] paths = System.getenv("PATH").split(File.pathSeparator);
+                boolean found = false;
+
+                for (String dir : paths) {
+                    File file = new File(dir, cmd);
+
+                    if (file.exists() && file.canExecute()) {
+                        System.out.println(cmd + " is " + file.getAbsolutePath());
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found) {
                     System.out.println(cmd + ": not found");
                 }
                 continue;

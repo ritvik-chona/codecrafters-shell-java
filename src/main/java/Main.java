@@ -34,7 +34,7 @@ public class Main {
 
             if (command.isEmpty()) continue;
 
-            // --- exit ---
+            // --- exit --
             if (command.equals("exit") || command.startsWith("exit ")) {
                 int code = 0;
                 String[] parts = command.split(" ", 2);
@@ -48,6 +48,23 @@ public class Main {
             // --- pwd ---
             if (command.equals("pwd")) {
                 System.out.println(currentDir);
+                continue;
+            }
+
+            // --- cd ---
+            if (command.equals("cd") || command.startsWith("cd ")) {
+                String path = command.length() > 3 ? command.substring(3).trim() : "~";
+
+                if (path.equals("~")) {
+                    path = System.getenv("HOME");
+                }
+                File target = new File(path);
+                if (target.exists() && target.isDirectory()) {
+                    currentDir = target.getCanonicalPath();
+                } 
+                else {
+                    System.out.println("cd: " + path + ": No such file or directory");
+                }
                 continue;
             }
 

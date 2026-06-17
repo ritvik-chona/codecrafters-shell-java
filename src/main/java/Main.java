@@ -11,7 +11,7 @@ public class Main {
             Set.of("echo", "exit", "type", "pwd", "cd"));
 
     private static String currentDir = System.getProperty("user.dir");
-
+    
     private static List<String> tokenize(String line) {
         List<String> tokens = new ArrayList<>();
         StringBuilder current = new StringBuilder();
@@ -20,22 +20,30 @@ public class Main {
         while (i < line.length()) {
             char c = line.charAt(i);
 
-            if (c == '\'') {
-                i++; 
+            if (c == '\\') {
+                i++;
+                if (i < line.length()) {
+                    current.append(line.charAt(i));
+                    i++;
+                }
+
+            } 
+            else if (c == '\'') {
+                i++;
                 while (i < line.length() && line.charAt(i) != '\'') {
                     current.append(line.charAt(i));
                     i++;
                 }
                 i++;
 
-            }
+            } 
             else if (c == '"') {
-                i++; 
+                i++;
                 while (i < line.length() && line.charAt(i) != '"') {
                     current.append(line.charAt(i));
                     i++;
                 }
-                i++; 
+                i++;
 
             } 
             else if (c == ' ' || c == '\t') {
@@ -45,12 +53,13 @@ public class Main {
                 }
                 i++;
 
-            } 
+            }
             else {
                 current.append(c);
                 i++;
             }
         }
+
         if (current.length() > 0) {
             tokens.add(current.toString());
         }

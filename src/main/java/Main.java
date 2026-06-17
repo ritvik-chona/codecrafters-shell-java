@@ -6,78 +6,88 @@ import java.util.Set;
 public class Main {
 
     private static final Set<String> builtins = new HashSet<>(
-            Set.of("echo", "exit", "type")
-    );
+            Set.of("echo", "exit", "type", "pwd", "cd"));
 
+    private static String currentDir = System.getProperty("user.dir"); 
+    
     private static File findExecutable(String cmd) {
-        String[] paths = System.getenv("PATH").split(File.pathSeparator);
-
+        String pathEnv = System.getenv("PATH");
+        if (pathEnv == null) return null;
+        String[] paths = pathEnv.split(File.pathSeparator);
         for (String dir : paths) {
             File file = new File(dir, cmd);
-
             if (file.exists() && file.canExecute()) {
                 return file;
             }
         }
-
         return null;
     }
 
     public static void main(String[] args) throws Exception {
-
         Scanner sc = new Scanner(System.in);
-
         while (true) {
-
             System.out.print("$ ");
+            System.out.flush();
 
-            String command = sc.nextLine();
+            if (!sc.hasNextLine()) break;
+            String command = sc.nextLine().trim();
 
-            if (command.equals("exit")) {
-                break;
+            if (command.isEmpty()) continue;
+
+            // --- exit ---
+            if (command.equals("exit") || command.startsWith("exit ")) {
+                int code = 0;
+                String[] parts = command.split(" ", 2);
+                if (parts.length == 2) {
+                    try { code = Integer.parseInt(parts[1].trim()); }
+                    catch (NumberFormatException ignored) {}
+                }
+                System.exit(code);
             }
 
-            if (command.startsWith("echo ")) {
-                System.out.println(command.substring(5));
+            // --- pwd ---
+            if (command.equals("pwd")) {
+                System.out.println(currentDir);
                 continue;
             }
 
-            if (command.startsWith("type ")) {
-                String cmd = command.substring(5);
+            // --- echo ---
+            if (command.startsWith("echo ") || command.equals("echo")) {
+                String output = command.length() > 5 ? command.substring(5) : "";
+                System.out.println(output);
+                continue;
+            }
 
+            // --- type ---
+            if (command.startsWith("type ") || command.equals("type")) {
+                if (command.equals("type")) continue;
+                String cmd = command.substring(5).trim();
                 if (builtins.contains(cmd)) {
                     System.out.println(cmd + " is a shell builtin");
                 } else {
                     File executable = findExecutable(cmd);
-
                     if (executable != null) {
                         System.out.println(cmd + " is " + executable.getAbsolutePath());
                     } else {
                         System.out.println(cmd + ": not found");
                     }
                 }
-
                 continue;
             }
 
+            // --- external commands ---
             String[] parts = command.split(" ");
+            File executable = findExecutable(parts[0]);
+            if (executable != null) {
+                ProcessBuilder pb = new ProcessBuilder(parts);
+                pb.directory(new File(currentDir));
+                pb.inheritIO();
+                Process process = pb.start();
+                process.waitFor();
+                continue;
+            }
 
-File executable = findExecutable(parts[0]);
-
-if (executable != null) {
-
-    ProcessBuilder pb = new ProcessBuilder(parts);
-
-    pb.inheritIO();
-
-    Process process = pb.start();
-
-    process.waitFor();
-
-    continue;
-}
-
-            System.out.println(command + ": command not found");
+            System.out.println(parts[0] + ": command not found");
         }
 
         sc.close();

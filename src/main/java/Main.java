@@ -4,6 +4,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Scanner;
 import java.util.Set;
+import java.io.FileOutputStream;
+import java.io.PrintStream;
 
 public class Main {
 
@@ -11,7 +13,14 @@ public class Main {
             Set.of("echo", "exit", "type", "pwd", "cd"));
 
     private static String currentDir = System.getProperty("user.dir");
-    
+
+    private static class Redirection {
+        String stdoutFile  = null;
+        String stderrFile  = null;
+        boolean appendStdout = false;
+        boolean appendStderr = false;
+    }
+
     private static List<String> tokenize(String line) {
         List<String> tokens = new ArrayList<>();
         StringBuilder current = new StringBuilder();
@@ -20,7 +29,7 @@ public class Main {
         while (i < line.length()) {
             char c = line.charAt(i);
 
-            if (c == '\\') {
+            if (c == '\\') {                        
                 i++;
                 if (i < line.length()) {
                     current.append(line.charAt(i));
@@ -28,7 +37,7 @@ public class Main {
                 }
 
             } 
-            else if (c == '\'') {
+            else if (c == '\'') {                 
                 i++;
                 while (i < line.length() && line.charAt(i) != '\'') {
                     current.append(line.charAt(i));
@@ -37,44 +46,96 @@ public class Main {
                 i++;
 
             } 
-            else if (c == '"') {
+            else if (c == '"') {                  
                 i++;
                 while (i < line.length() && line.charAt(i) != '"') {
                     char d = line.charAt(i);
                     if (d == '\\' && i + 1 < line.length()) {
                         char next = line.charAt(i + 1);
                         if (next == '\\' || next == '"' || next == '$' || next == '`') {
-                            current.append(next); 
+                            current.append(next);
                             i += 2;
-                        } else {
-                            current.append(d);    
+                        } 
+                        else {
+                            current.append(d);
                             i++;
                         }
-                    } else {
+                    } 
+                    else {
                         current.append(d);
                         i++;
                     }
                 }
                 i++;
-            }
-            else if (c == ' ' || c == '\t') {
+
+            } 
+            else if (c == ' ' || c == '\t') {     
                 if (current.length() > 0) {
                     tokens.add(current.toString());
                     current.setLength(0);
                 }
                 i++;
 
-            }
+            } 
             else {
                 current.append(c);
                 i++;
             }
         }
-
         if (current.length() > 0) {
             tokens.add(current.toString());
         }
         return tokens;
+    }
+
+    private static List<String> extractRedirections(List<String> tokens, Redirection redir) {
+        List<String> clean = new ArrayList<>();
+        int i = 0;
+        while (i < tokens.size()) {
+            String t = tokens.get(i);
+            if ((t.equals(">") || t.equals("1>")) && i + 1 < tokens.size()) {
+                redir.stdoutFile = tokens.get(i + 1);
+                redir.appendStdout = false;
+                i += 2;
+            } 
+            else if ((t.equals(">>") || t.equals("1>>")) && i + 1 < tokens.size()) {
+                redir.stdoutFile = tokens.get(i + 1);
+                redir.appendStdout = true;
+                i += 2;
+            } 
+            else if (t.equals("2>") && i + 1 < tokens.size()) {
+                redir.stderrFile = tokens.get(i + 1);
+                redir.appendStderr = false;
+                i += 2;
+            } 
+            else if (t.equals("2>>") && i + 1 < tokens.size()) {
+                redir.stderrFile = tokens.get(i + 1);
+                redir.appendStderr = true;
+                i += 2;
+            } 
+            else {
+                clean.add(t);
+                i++;
+            }
+        }
+        return clean;
+    }
+
+    private static void applyRedirections(ProcessBuilder pb, Redirection redir) {
+        if (redir.stdoutFile != null) {
+            File f = new File(redir.stdoutFile);
+            f.getParentFile().mkdirs(); 
+            pb.redirectOutput(redir.appendStdout
+                    ? ProcessBuilder.Redirect.appendTo(f)
+                    : ProcessBuilder.Redirect.to(f));
+        }
+        if (redir.stderrFile != null) {
+            File f = new File(redir.stderrFile);
+            f.getParentFile().mkdirs();
+            pb.redirectError(redir.appendStderr
+                    ? ProcessBuilder.Redirect.appendTo(f)
+                    : ProcessBuilder.Redirect.to(f));
+        }
     }
 
     private static File findExecutable(String cmd) {
@@ -104,6 +165,11 @@ public class Main {
             List<String> tokens = tokenize(line);
             if (tokens.isEmpty()) continue;
 
+            // Extract any redirection operators before dispatching
+            Redirection redir = new Redirection();
+            tokens = extractRedirections(tokens, redir);
+            if (tokens.isEmpty()) continue;
+
             String command = tokens.get(0);
 
             // --- exit ---
@@ -118,7 +184,12 @@ public class Main {
 
             // --- pwd ---
             if (command.equals("pwd")) {
-                System.out.println(currentDir);
+                String out = currentDir + "\n";
+                if (redir.stdoutFile != null) {
+                    writeToFile(redir.stdoutFile, redir.appendStdout, out);
+                } else {
+                    System.out.print(out);
+                }
                 continue;
             }
 
@@ -131,12 +202,15 @@ public class Main {
                 File target = path.startsWith("/")
                         ? new File(path)
                         : new File(currentDir, path);
-
                 if (target.exists() && target.isDirectory()) {
                     currentDir = target.getCanonicalPath();
-                } 
-                else {
-                    System.out.println("cd: " + path + ": No such file or directory");
+                } else {
+                    String err = "cd: " + path + ": No such file or directory\n";
+                    if (redir.stderrFile != null) {
+                        writeToFile(redir.stderrFile, redir.appendStderr, err);
+                    } else {
+                        System.err.print(err);
+                    }
                 }
                 continue;
             }
@@ -148,7 +222,12 @@ public class Main {
                     if (i > 1) sb.append(" ");
                     sb.append(tokens.get(i));
                 }
-                System.out.println(sb.toString());
+                sb.append("\n");
+                if (redir.stdoutFile != null) {
+                    writeToFile(redir.stdoutFile, redir.appendStdout, sb.toString());
+                } else {
+                    System.out.print(sb.toString());
+                }
                 continue;
             }
 
@@ -156,17 +235,21 @@ public class Main {
             if (command.equals("type")) {
                 if (tokens.size() < 2) continue;
                 String cmd = tokens.get(1);
+                String result;
                 if (builtins.contains(cmd)) {
-                    System.out.println(cmd + " is a shell builtin");
-                }
-                else {
+                    result = cmd + " is a shell builtin\n";
+                } else {
                     File executable = findExecutable(cmd);
                     if (executable != null) {
-                        System.out.println(cmd + " is " + executable.getAbsolutePath());
+                        result = cmd + " is " + executable.getAbsolutePath() + "\n";
+                    } else {
+                        result = cmd + ": not found\n";
                     }
-                    else {
-                        System.out.println(cmd + ": not found");
-                    }
+                }
+                if (redir.stdoutFile != null) {
+                    writeToFile(redir.stdoutFile, redir.appendStdout, result);
+                } else {
+                    System.out.print(result);
                 }
                 continue;
             }
@@ -176,13 +259,32 @@ public class Main {
             if (executable != null) {
                 ProcessBuilder pb = new ProcessBuilder(tokens);
                 pb.directory(new File(currentDir));
-                pb.inheritIO();
+                // only inherit the streams we are NOT redirecting
+                if (redir.stdoutFile == null && redir.stderrFile == null) {
+                    pb.inheritIO();
+                } else {
+                    pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
+                    if (redir.stdoutFile == null) pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+                    if (redir.stderrFile == null)  pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+                }
+                applyRedirections(pb, redir);
                 Process process = pb.start();
                 process.waitFor();
                 continue;
             }
+
             System.out.println(command + ": command not found");
         }
+
         sc.close();
+    }
+
+    // Helper: write a string to a file (truncate or append)
+    private static void writeToFile(String path, boolean append, String content) throws Exception {
+        File f = new File(path);
+        if (f.getParentFile() != null) f.getParentFile().mkdirs();
+        try (PrintStream ps = new PrintStream(new FileOutputStream(f, append))) {
+            ps.print(content);
+        }
     }
 }

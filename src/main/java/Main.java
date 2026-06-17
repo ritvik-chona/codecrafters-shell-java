@@ -58,7 +58,9 @@ public class Main {
                 if (path.equals("~")) {
                     path = System.getenv("HOME");
                 }
-                File target = new File(path);
+                
+                File target = path.startsWith("/") ? new File(path) : new File(currentDir, path);
+
                 if (target.exists() && target.isDirectory()) {
                     currentDir = target.getCanonicalPath();
                 } 

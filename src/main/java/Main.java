@@ -40,12 +40,23 @@ public class Main {
             else if (c == '"') {
                 i++;
                 while (i < line.length() && line.charAt(i) != '"') {
-                    current.append(line.charAt(i));
-                    i++;
+                    char d = line.charAt(i);
+                    if (d == '\\' && i + 1 < line.length()) {
+                        char next = line.charAt(i + 1);
+                        if (next == '\\' || next == '"' || next == '$' || next == '`') {
+                            current.append(next); 
+                            i += 2;
+                        } else {
+                            current.append(d);    
+                            i++;
+                        }
+                    } else {
+                        current.append(d);
+                        i++;
+                    }
                 }
                 i++;
-
-            } 
+            }
             else if (c == ' ' || c == '\t') {
                 if (current.length() > 0) {
                     tokens.add(current.toString());

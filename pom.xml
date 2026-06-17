@@ -8,12 +8,20 @@
     <artifactId>codecrafters-shell</artifactId>
     <version>1.0</version>
 
-   <properties>
+    <properties>
         <maven.compiler.source>26</maven.compiler.source>
         <maven.compiler.target>26</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>26</java.version>
     </properties>
+
+    <dependencies>                          <!-- ← wrapper tag was missing -->
+        <dependency>
+            <groupId>org.jline</groupId>
+            <artifactId>jline</artifactId>
+            <version>3.25.1</version>
+        </dependency>
+    </dependencies>                         <!-- ← closing tag -->
 
     <build>
         <plugins>
@@ -30,7 +38,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>
                 <configuration>
-                    <finalName>codecrafters-shell</finalName> <!-- Please do not change this final artifact name-->
+                    <finalName>codecrafters-shell</finalName>
                     <descriptorRefs>
                         <descriptorRef>jar-with-dependencies</descriptorRef>
                     </descriptorRefs>
@@ -38,13 +46,11 @@
                     <archive>
                         <manifest>
                             <addClasspath>true</addClasspath>
-                            <!-- This is the main class of your program which will be executed-->
                             <mainClass>Main</mainClass>
                         </manifest>
                     </archive>
                     <outputDirectory>${dir}</outputDirectory>
                 </configuration>
-
                 <executions>
                     <execution>
                         <id>make-assembly</id>

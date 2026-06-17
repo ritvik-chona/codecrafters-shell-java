@@ -1,10 +1,17 @@
+import org.jline.reader.LineReader;
+import org.jline.reader.LineReaderBuilder;
+import org.jline.reader.Completer;
+import org.jline.reader.Candidate;
+import org.jline.reader.ParsedLine;
+import org.jline.terminal.Terminal;
+import org.jline.terminal.TerminalBuilder;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Scanner;
 import java.util.Set;
 
 public class Main {
@@ -21,6 +28,8 @@ public class Main {
         boolean appendStderr = false;
     }
 
+    // ── Tokenizer ────────────────────────────────────────────────────────────
+
     private static List<String> tokenize(String line) {
         List<String> tokens = new ArrayList<>();
         StringBuilder current = new StringBuilder();
@@ -31,17 +40,15 @@ public class Main {
 
             if (c == '\\') {
                 i++;
-                if (i < line.length()) {
-                    current.append(line.charAt(i));
-                    i++;
-                }
+                if (i < line.length()) { current.append(line.charAt(i)); i++; }
+
             } else if (c == '\'') {
                 i++;
                 while (i < line.length() && line.charAt(i) != '\'') {
-                    current.append(line.charAt(i));
-                    i++;
+                    current.append(line.charAt(i)); i++;
                 }
                 i++;
+
             } else if (c == '"') {
                 i++;
                 while (i < line.length() && line.charAt(i) != '"') {
@@ -49,35 +56,24 @@ public class Main {
                     if (d == '\\' && i + 1 < line.length()) {
                         char next = line.charAt(i + 1);
                         if (next == '\\' || next == '"' || next == '$' || next == '`') {
-                            current.append(next);
-                            i += 2;
-                        } else {
-                            current.append(d);
-                            i++;
-                        }
-                    } else {
-                        current.append(d);
-                        i++;
-                    }
+                            current.append(next); i += 2;
+                        } else { current.append(d); i++; }
+                    } else { current.append(d); i++; }
                 }
                 i++;
+
             } else if (c == ' ' || c == '\t') {
-                if (current.length() > 0) {
-                    tokens.add(current.toString());
-                    current.setLength(0);
-                }
+                if (current.length() > 0) { tokens.add(current.toString()); current.setLength(0); }
                 i++;
-            } else {
-                current.append(c);
-                i++;
-            }
+
+            } else { current.append(c); i++; }
         }
 
-        if (current.length() > 0) {
-            tokens.add(current.toString());
-        }
+        if (current.length() > 0) tokens.add(current.toString());
         return tokens;
     }
+
+    // ── Redirection ──────────────────────────────────────────────────────────
 
     private static List<String> extractRedirections(List<String> tokens, Redirection redir) {
         List<String> clean = new ArrayList<>();
@@ -85,25 +81,14 @@ public class Main {
         while (i < tokens.size()) {
             String t = tokens.get(i);
             if ((t.equals(">") || t.equals("1>")) && i + 1 < tokens.size()) {
-                redir.stdoutFile = tokens.get(i + 1);
-                redir.appendStdout = false;
-                i += 2;
+                redir.stdoutFile = tokens.get(i + 1); redir.appendStdout = false; i += 2;
             } else if ((t.equals(">>") || t.equals("1>>")) && i + 1 < tokens.size()) {
-                redir.stdoutFile = tokens.get(i + 1);
-                redir.appendStdout = true;
-                i += 2;
+                redir.stdoutFile = tokens.get(i + 1); redir.appendStdout = true; i += 2;
             } else if (t.equals("2>") && i + 1 < tokens.size()) {
-                redir.stderrFile = tokens.get(i + 1);
-                redir.appendStderr = false;
-                i += 2;
+                redir.stderrFile = tokens.get(i + 1); redir.appendStderr = false; i += 2;
             } else if (t.equals("2>>") && i + 1 < tokens.size()) {
-                redir.stderrFile = tokens.get(i + 1);
-                redir.appendStderr = true;
-                i += 2;
-            } else {
-                clean.add(t);
-                i++;
-            }
+                redir.stderrFile = tokens.get(i + 1); redir.appendStderr = true; i += 2;
+            } else { clean.add(t); i++; }
         }
         return clean;
     }
@@ -112,60 +97,92 @@ public class Main {
         if (redir.stdoutFile != null) {
             File f = new File(redir.stdoutFile);
             if (f.getParentFile() != null) f.getParentFile().mkdirs();
-            pb.redirectOutput(redir.appendStdout
-                    ? ProcessBuilder.Redirect.appendTo(f)
-                    : ProcessBuilder.Redirect.to(f));
+            pb.redirectOutput(redir.appendStdout ? ProcessBuilder.Redirect.appendTo(f) : ProcessBuilder.Redirect.to(f));
         }
         if (redir.stderrFile != null) {
             File f = new File(redir.stderrFile);
             if (f.getParentFile() != null) f.getParentFile().mkdirs();
-            pb.redirectError(redir.appendStderr
-                    ? ProcessBuilder.Redirect.appendTo(f)
-                    : ProcessBuilder.Redirect.to(f));
+            pb.redirectError(redir.appendStderr ? ProcessBuilder.Redirect.appendTo(f) : ProcessBuilder.Redirect.to(f));
         }
     }
 
-    // Write string to a file (truncate or append). Always creates the file.
     private static void writeToFile(String path, boolean append, String content) throws Exception {
         File f = new File(path);
         if (f.getParentFile() != null) f.getParentFile().mkdirs();
-        try (PrintStream ps = new PrintStream(new FileOutputStream(f, append))) {
-            ps.print(content);
-        }
+        try (PrintStream ps = new PrintStream(new FileOutputStream(f, append))) { ps.print(content); }
     }
 
-    // Ensure a redirection file exists even if nothing is written to it.
-    // Shells always create the target file when a redirection is present.
     private static void touchFile(String path, boolean append) throws Exception {
         if (path == null) return;
         File f = new File(path);
         if (f.getParentFile() != null) f.getParentFile().mkdirs();
-        // opening with append=false truncates; append=true leaves existing content
         new FileOutputStream(f, append).close();
     }
+
+    // ── PATH lookup ──────────────────────────────────────────────────────────
 
     private static File findExecutable(String cmd) {
         String pathEnv = System.getenv("PATH");
         if (pathEnv == null) return null;
-        String[] paths = pathEnv.split(File.pathSeparator);
-        for (String dir : paths) {
+        for (String dir : pathEnv.split(File.pathSeparator)) {
             File file = new File(dir, cmd);
-            if (file.exists() && file.canExecute()) {
-                return file;
-            }
+            if (file.exists() && file.canExecute()) return file;
         }
         return null;
     }
 
+    // ── Tab completer ────────────────────────────────────────────────────────
+
+    private static class ShellCompleter implements Completer {
+        @Override
+        public void complete(LineReader reader, ParsedLine line, List<Candidate> candidates) {
+            String word = line.word(); // what the user has typed so far
+
+            // complete builtin names
+            for (String b : builtins) {
+                if (b.startsWith(word)) {
+                    candidates.add(new Candidate(b));
+                }
+            }
+
+            // complete external executables found in PATH
+            String pathEnv = System.getenv("PATH");
+            if (pathEnv != null) {
+                for (String dir : pathEnv.split(File.pathSeparator)) {
+                    File d = new File(dir);
+                    if (!d.isDirectory()) continue;
+                    File[] files = d.listFiles();
+                    if (files == null) continue;
+                    for (File f : files) {
+                        if (f.canExecute() && !f.isDirectory() && f.getName().startsWith(word)) {
+                            candidates.add(new Candidate(f.getName()));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Main ─────────────────────────────────────────────────────────────────
+
     public static void main(String[] args) throws Exception {
-        Scanner sc = new Scanner(System.in);
+
+        Terminal terminal = TerminalBuilder.builder().system(true).build();
+        LineReader reader = LineReaderBuilder.builder()
+                .terminal(terminal)
+                .completer(new ShellCompleter())
+                .option(LineReader.Option.DISABLE_EVENT_EXPANSION, true) // don't expand ! history
+                .build();
 
         while (true) {
-            System.out.print("$ ");
-            System.out.flush();
-
-            if (!sc.hasNextLine()) break;
-            String line = sc.nextLine().trim();
+            String line;
+            try {
+                line = reader.readLine("$ ");
+            } catch (org.jline.reader.EndOfFileException | org.jline.reader.UserInterruptException e) {
+                break;
+            }
+            if (line == null) break;
+            line = line.trim();
             if (line.isEmpty()) continue;
 
             List<String> tokens = tokenize(line);
@@ -189,7 +206,7 @@ public class Main {
 
             // --- pwd ---
             if (command.equals("pwd")) {
-                touchFile(redir.stderrFile, redir.appendStderr); // create stderr file even if unused
+                touchFile(redir.stderrFile, redir.appendStderr);
                 String out = currentDir + "\n";
                 if (redir.stdoutFile != null) writeToFile(redir.stdoutFile, redir.appendStdout, out);
                 else System.out.print(out);
@@ -201,9 +218,7 @@ public class Main {
                 touchFile(redir.stdoutFile, redir.appendStdout);
                 String path = tokens.size() > 1 ? tokens.get(1) : "~";
                 if (path.equals("~")) path = System.getenv("HOME");
-                File target = path.startsWith("/")
-                        ? new File(path)
-                        : new File(currentDir, path);
+                File target = path.startsWith("/") ? new File(path) : new File(currentDir, path);
                 if (target.exists() && target.isDirectory()) {
                     currentDir = target.getCanonicalPath();
                     touchFile(redir.stderrFile, redir.appendStderr);
@@ -217,7 +232,6 @@ public class Main {
 
             // --- echo ---
             if (command.equals("echo")) {
-                // echo never writes to stderr — always create the file empty if redirected
                 touchFile(redir.stderrFile, redir.appendStderr);
                 StringBuilder sb = new StringBuilder();
                 for (int i = 1; i < tokens.size(); i++) {
@@ -265,7 +279,5 @@ public class Main {
 
             System.out.println(command + ": command not found");
         }
-
-        sc.close();
     }
 }

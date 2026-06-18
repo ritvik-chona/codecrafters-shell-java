@@ -209,7 +209,15 @@ public class Main {
                         // argv[1]=cmdName, argv[2]=word being completed, argv[3]=previous word
                         List<String> lineWords = line.words();
                         String currentWord  = word; // the partial text at cursor
-                        String previousWord = (wordIndex >= 2) ? lineWords.get(wordIndex - 1) : "";
+                        String previousWord;
+
+                        if (wordIndex == 1) {
+                            previousWord = cmdName;
+                        } else if (wordIndex >= 2) {
+                            previousWord = lineWords.get(wordIndex - 1);
+                        } else {
+                            previousWord = "";
+                        }
                         ProcessBuilder pb = new ProcessBuilder(
                                 completionSpecs.get(cmdName),   // script path
                                 cmdName,                         // argv[1]: command

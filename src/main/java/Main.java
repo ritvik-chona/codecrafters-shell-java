@@ -453,6 +453,42 @@ public class Main {
 
     // ── Main ─────────────────────────────────────────────────────────────────
 
+    private static void checkJobs(boolean printAll) {
+        int lastJob = bgJobs.size() - 1;
+        int secondLastJob = bgJobs.size() - 2;
+
+        List<Integer> toRemove = new ArrayList<>();
+        for (int j = 0; j < bgJobs.size(); j++) {
+            Process proc = bgProcesses.get(j);
+            long[] info = bgJobs.get(j);
+            int jobNum = (int) info[0];
+            String cmd = bgCommands.get(j);
+            char marker = ' ';
+            if (j == lastJob) {
+                marker = '+';
+            } else if (j == secondLastJob) {
+                marker = '-';
+            }
+            if (proc.isAlive()) {
+                if (printAll) {
+                    String status = String.format("%-24s", "Running");
+                    System.out.println("[" + jobNum + "]" + marker + "  " + status + cmd + " &");
+                }
+            } else {
+                String status = String.format("%-24s", "Done");
+                System.out.println("[" + jobNum + "]" + marker + "  " + status + cmd);
+                toRemove.add(j);
+            }
+        }
+        
+        for (int i = toRemove.size() - 1; i >= 0; i--) {
+            int idx = toRemove.get(i);
+            bgJobs.remove(idx);
+            bgProcesses.remove(idx);
+            bgCommands.remove(idx);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
 
         terminal = TerminalBuilder.builder().system(true).build();
@@ -467,6 +503,7 @@ public class Main {
         while (true) {
             String line;
             try {
+                checkJobs(false);
                 line = reader.readLine("$ ");
             } catch (org.jline.reader.EndOfFileException | org.jline.reader.UserInterruptException e) {
                 break;
@@ -565,37 +602,7 @@ public class Main {
 
             // --- jobs ---
             if (command.equals("jobs")) {
-                int lastJob = bgJobs.size() - 1;
-                int secondLastJob = bgJobs.size() - 2;
-
-                List<Integer> toRemove = new ArrayList<>();
-                for (int j = 0; j < bgJobs.size(); j++) {
-                    Process proc = bgProcesses.get(j);
-                    long[] info = bgJobs.get(j);
-                    int jobNum = (int) info[0];
-                    String cmd = bgCommands.get(j);
-                    char marker = ' ';
-                    if (j == lastJob) {
-                        marker = '+';
-                    } else if (j == secondLastJob) {
-                        marker = '-';
-                    }
-                    if (proc.isAlive()) {
-                        String status = String.format("%-24s", "Running");
-                        System.out.println("[" + jobNum + "]" + marker + "  " + status + cmd + " &");
-                    } else {
-                        String status = String.format("%-24s", "Done");
-                        System.out.println("[" + jobNum + "]" + marker + "  " + status + cmd);
-                        toRemove.add(j);
-                    }
-                }
-                
-                for (int i = toRemove.size() - 1; i >= 0; i--) {
-                    int idx = toRemove.get(i);
-                    bgJobs.remove(idx);
-                    bgProcesses.remove(idx);
-                    bgCommands.remove(idx);
-                }
+                checkJobs(true);
                 continue;
             }
 

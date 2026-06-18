@@ -297,6 +297,9 @@ public class Main {
         }
 
         private void ringBell(LineReader reader) {
+            // stdout so the tester sees \x07 in the raw stream
+            System.out.print("\007");
+            System.out.flush();
             reader.getTerminal().writer().print("\007");
             reader.getTerminal().writer().flush();
         }

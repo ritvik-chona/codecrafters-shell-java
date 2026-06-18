@@ -216,6 +216,10 @@ public class Main {
                                 currentWord,                     // argv[2]: word being completed
                                 previousWord                     // argv[3]: preceding word
                         );
+                        // COMP_LINE = full command line text, COMP_POINT = cursor byte index
+                        String compLine = line.line();
+                        pb.environment().put("COMP_LINE",  compLine);
+                        pb.environment().put("COMP_POINT", String.valueOf(compLine.getBytes(java.nio.charset.StandardCharsets.UTF_8).length));
                         pb.redirectErrorStream(true);
                         Process proc = pb.start();
                         proc.waitFor();

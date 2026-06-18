@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 public class Main {
 
     private static final Set<String> builtins = new HashSet<>(
-            Set.of("echo", "exit", "type", "pwd", "cd", "complete"));
+            Set.of("echo", "exit", "type", "pwd", "cd", "complete", "jobs"));
 
     private static String currentDir = System.getProperty("user.dir");
 
@@ -546,6 +546,12 @@ public class Main {
                 }
                 if (redir.stdoutFile != null) writeToFile(redir.stdoutFile, redir.appendStdout, result);
                 else System.out.print(result);
+                continue;
+            }
+
+            // --- jobs ---
+            if (command.equals("jobs")) {
+                // empty implementation for now — no background jobs to report
                 continue;
             }
 

@@ -435,8 +435,7 @@ public class Main {
             if (command.equals("complete")) {
                 if (tokens.size() >= 3 && tokens.get(1).equals("-p")) {
                     String cmdName = tokens.get(2);
-                    String err = "complete: " + cmdName + ": no completion specification
-";
+                    String err = "complete: " + cmdName + ": no completion specification";
                     if (redir.stderrFile != null) writeToFile(redir.stderrFile, redir.appendStderr, err);
                     else System.out.print(err);
                 }

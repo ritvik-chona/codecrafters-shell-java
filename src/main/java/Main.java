@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 public class Main {
 
     private static final Set<String> builtins = new HashSet<>(
-            Set.of("echo", "exit", "type", "pwd", "cd"));
+            Set.of("echo", "exit", "type", "pwd", "cd", "complete"));
 
     private static String currentDir = System.getProperty("user.dir");
 

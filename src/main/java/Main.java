@@ -184,6 +184,40 @@ public class Main {
         @Override
         public void complete(LineReader reader, ParsedLine line, List<Candidate> candidates) {
             String word = line.word();
+            int wordIndex = line.wordIndex(); // 0 = command name, >0 = argument
+
+            // argument position → complete filenames in currentDir
+            if (wordIndex > 0) {
+                Set<String> fileMatches = new TreeSet<>();
+                File dir = new File(currentDir);
+                File[] files = dir.listFiles();
+                if (files != null) {
+                    for (File f : files) {
+                        if (f.getName().startsWith(word)) {
+                            String name = f.isDirectory() ? f.getName() + "/" : f.getName();
+                            fileMatches.add(name);
+                        }
+                    }
+                }
+                if (fileMatches.isEmpty()) {
+                    ringBell(reader);
+                    return;
+                }
+                if (fileMatches.size() == 1) {
+                    candidates.add(new Candidate(fileMatches.iterator().next()));
+                    return;
+                }
+                // multiple file matches → extend to LCP, otherwise bell
+                String lcp = longestCommonPrefix(fileMatches);
+                if (lcp.length() > word.length()) {
+                    candidates.add(new Candidate(lcp, lcp, null, null, null, null, false));
+                } else {
+                    ringBell(reader);
+                }
+                return;
+            }
+
+            // wordIndex == 0 → complete command names
             Set<String> matches = collectMatches(word);
 
             if (matches.isEmpty()) {

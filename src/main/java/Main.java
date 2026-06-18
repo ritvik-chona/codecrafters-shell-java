@@ -205,7 +205,17 @@ public class Main {
 
             if (lcp.length() > word.length()) {
                 // can extend to the common prefix — do that first
-                candidates.add(new Candidate(lcp));
+                // complete=false suppresses the trailing space JLine would add,
+                // since this LCP isn't necessarily a complete/unique command name
+                candidates.add(new Candidate(
+                        lcp,        // value inserted into the line
+                        lcp,        // display string
+                        null,       // group
+                        null,       // description
+                        null,       // suffix  (null = no trailing space)
+                        null,       // key
+                        false       // complete — false = don't add trailing space
+                ));
                 lastBelledWord = null;
                 return;
             }

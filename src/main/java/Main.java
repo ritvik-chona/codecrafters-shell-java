@@ -206,7 +206,16 @@ public class Main {
                 if (completionSpecs.containsKey(cmdName)) {
                     // run the registered completer script and use its stdout as candidates
                     try {
-                        ProcessBuilder pb = new ProcessBuilder(completionSpecs.get(cmdName));
+                        // argv[1]=cmdName, argv[2]=word being completed, argv[3]=previous word
+                        List<String> lineWords = line.words();
+                        String currentWord  = word; // the partial text at cursor
+                        String previousWord = (wordIndex >= 2) ? lineWords.get(wordIndex - 1) : "";
+                        ProcessBuilder pb = new ProcessBuilder(
+                                completionSpecs.get(cmdName),   // script path
+                                cmdName,                         // argv[1]: command
+                                currentWord,                     // argv[2]: word being completed
+                                previousWord                     // argv[3]: preceding word
+                        );
                         pb.redirectErrorStream(true);
                         Process proc = pb.start();
                         proc.waitFor();

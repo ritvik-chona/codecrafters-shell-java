@@ -431,6 +431,18 @@ public class Main {
                 continue;
             }
 
+            // --- complete ---
+            if (command.equals("complete")) {
+                if (tokens.size() >= 3 && tokens.get(1).equals("-p")) {
+                    String cmdName = tokens.get(2);
+                    String err = "complete: " + cmdName + ": no completion specification
+";
+                    if (redir.stderrFile != null) writeToFile(redir.stderrFile, redir.appendStderr, err);
+                    else System.out.print(err);
+                }
+                continue;
+            }
+
             // --- external commands ---
             File executable = findExecutable(command);
             if (executable != null) {

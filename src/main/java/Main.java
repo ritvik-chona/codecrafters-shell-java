@@ -197,8 +197,35 @@ public class Main {
             String word = line.word();
             int wordIndex = line.wordIndex(); // 0 = command name, >0 = argument
 
-            // argument position → complete filenames (supports nested paths)
+            // argument position → check for registered completer first, then filenames
             if (wordIndex > 0) {
+                // get the command name (first token of the line)
+                List<String> lineTokens = line.words();
+                String cmdName = lineTokens.isEmpty() ? "" : lineTokens.get(0);
+
+                if (completionSpecs.containsKey(cmdName)) {
+                    // run the registered completer script and use its stdout as candidates
+                    try {
+                        ProcessBuilder pb = new ProcessBuilder(completionSpecs.get(cmdName));
+                        pb.redirectErrorStream(true);
+                        Process proc = pb.start();
+                        proc.waitFor();
+                        String output = new String(proc.getInputStream().readAllBytes()).trim();
+                        if (!output.isEmpty()) {
+                            for (String candidate : output.split("\n")) {
+                                candidate = candidate.trim();
+                                if (!candidate.isEmpty()) {
+                                    candidates.add(new Candidate(candidate));
+                                }
+                            }
+                        } else {
+                            ringBell(reader);
+                        }
+                    } catch (Exception e) {
+                        ringBell(reader);
+                    }
+                    return;
+                }
                 // split "path/to/f" into dirPart="path/to/" and prefix="f"
                 int lastSlash = word.lastIndexOf('/');
                 String dirPart  = lastSlash >= 0 ? word.substring(0, lastSlash + 1) : "";

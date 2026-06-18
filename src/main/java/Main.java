@@ -556,6 +556,9 @@ public class Main {
                     String script  = tokens.get(2);
                     String cmdName = tokens.get(3);
                     completionSpecs.put(cmdName, script);
+                } else if (tokens.size() >= 3 && tokens.get(1).equals("-r")) {
+                    // complete -r <cmdName> → unregister (silent, even if not registered)
+                    completionSpecs.remove(tokens.get(2));
                 } else if (tokens.size() >= 3 && tokens.get(1).equals("-p")) {
                     // complete -p <cmdName>  → print registration or error
                     String cmdName = tokens.get(2);

@@ -167,23 +167,23 @@ public class Main {
         return matches;
     }
 
-    private static String longestCommonPrefix(Set<String> words) {
-        // Strip trailing '/' before computing LCP so directories compare correctly.
-        // e.g. "xyz_foo/" and "xyz_foo_bar/" share "xyz_foo" not "xyz_foo/"
-        String[] arr = words.stream()
-                .map(w -> w.endsWith("/") ? w.substring(0, w.length() - 1) : w)
-                .toArray(String[]::new);
-        String first = arr[0];
-        int len = first.length();
-        for (int i = 1; i < arr.length; i++) {
-            len = Math.min(len, arr[i].length());
-            for (int j = 0; j < len; j++) {
-                if (first.charAt(j) != arr[i].charAt(j)) { len = j; break; }
+    private static String longestCommonPrefix(List<String> words) {
+    if (words.isEmpty()) return "";
+
+    String prefix = words.get(0);
+
+    for (int i = 1; i < words.size(); i++) {
+        while (!words.get(i).startsWith(prefix)) {
+            prefix = prefix.substring(0, prefix.length() - 1);
+
+            if (prefix.isEmpty()) {
+                return "";
             }
         }
-        return first.substring(0, len);
     }
 
+    return prefix;
+}
     // ── Tab completer ────────────────────────────────────────────────────────
 
     private static class ShellCompleter implements Completer {
@@ -233,42 +233,85 @@ public class Main {
                         proc.waitFor();
                         String output = new String(proc.getInputStream().readAllBytes()).trim();
                         if (!output.isEmpty()) {
-                            // collect and sort candidates
-                            List<String> cands = new java.util.ArrayList<>();
-                            for (String c : output.split("\n")) {
-                                c = c.trim();
-                                if (!c.isEmpty()) cands.add(c);
-                            }
-                            java.util.Collections.sort(cands);
 
-                            if (cands.size() == 1) {
-                                // unique match → complete with trailing space
-                                candidates.add(new Candidate(cands.get(0)));
-                            } else {
-                                // multiple matches → bell on first TAB, list on second
-                                String cacheKey = "script:" + cmdName + ":" + word;
-                                if (!cacheKey.equals(lastBelledWord)) {
-                                    ringBell(reader);
-                                    lastBelledWord = cacheKey;
-                                } else {
-                                    lastBelledWord = null;
-                                    String matchLine = String.join("  ", cands);
-                                    terminal.writer().print("\r\n" + matchLine + "\r\n");
-                                    terminal.writer().flush();
-                                    terminal.writer().print("$ " + line.line());
-                                    terminal.writer().flush();
-                                    for (String c : cands)
-                                        candidates.add(new Candidate(c, c, null, null, null, null, false));
-                                }
-                            }
-                        } else {
-                            ringBell(reader);
-                        }
-                    } catch (Exception e) {
-                        ringBell(reader);
+    List<String> cands = new ArrayList<>();
+
+    for (String c : output.split("\n")) {
+        c = c.trim();
+        if (!c.isEmpty()) {
+            cands.add(c);
+        }
+    }
+
+    java.util.Collections.sort(cands);
+
+    if (cands.size() == 1) {
+        candidates.add(new Candidate(cands.get(0)));
+        lastBelledWord = null;
+        return;
+    }
+
+    String lcp = longestCommonPrefix(cands);
+
+    if (lcp.length() > currentWord.length()) {
+
+        candidates.add(
+                new Candidate(
+                        lcp,
+                        lcp,
+                        null,
+                        null,
+                        null,
+                        null,
+                        false
+                )
+        );
+
+        lastBelledWord = null;
+        return;
+    }
+
+    String cacheKey = "script:" + cmdName + ":" + word;
+
+    if (!cacheKey.equals(lastBelledWord)) {
+
+        ringBell(reader);
+        lastBelledWord = cacheKey;
+
+    } else {
+
+        lastBelledWord = null;
+
+        String matchLine = String.join("  ", cands);
+
+        terminal.writer().print("\r\n" + matchLine + "\r\n");
+        terminal.writer().flush();
+
+        terminal.writer().print("$ " + line.line());
+        terminal.writer().flush();
+
+        for (String c : cands) {
+            candidates.add(
+                    new Candidate(
+                            c,
+                            c,
+                            null,
+                            null,
+                            null,
+                            null,
+                            false
+                    )
+            );
+        }
+    }
+}
+                        return;
+                    } catch (Exception ignored) {
+                        // completer script failed — fall through to filename completion
                     }
                     return;
                 }
+
                 // split "path/to/f" into dirPart="path/to/" and prefix="f"
                 int lastSlash = word.lastIndexOf('/');
                 String dirPart  = lastSlash >= 0 ? word.substring(0, lastSlash + 1) : "";
@@ -308,7 +351,7 @@ public class Main {
                     return;
                 }
                 // multiple matches → try LCP extension first
-                String lcp = longestCommonPrefix(fileMatches);
+                String lcp = longestCommonPrefix(new ArrayList<>(fileMatches));
                 if (lcp.length() > word.length()) {
                     // can extend to common prefix — do so without trailing space
                     candidates.add(new Candidate(lcp, lcp, null, null, null, null, false));
@@ -351,7 +394,7 @@ public class Main {
             }
 
             // multiple matches
-            String lcp = longestCommonPrefix(matches);
+            String lcp = longestCommonPrefix(new ArrayList<>(matches));
 
             if (lcp.length() > word.length()) {
                 // can extend to the common prefix — do that first

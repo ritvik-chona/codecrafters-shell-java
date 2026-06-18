@@ -13,7 +13,9 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Arrays;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 public class Main {
 
@@ -161,7 +163,11 @@ public class Main {
     }
 
     private static String longestCommonPrefix(Set<String> words) {
-        String[] arr = words.toArray(new String[0]);
+        // Strip trailing '/' before computing LCP so directories compare correctly.
+        // e.g. "xyz_foo/" and "xyz_foo_bar/" share "xyz_foo" not "xyz_foo/"
+        String[] arr = words.stream()
+                .map(w -> w.endsWith("/") ? w.substring(0, w.length() - 1) : w)
+                .toArray(String[]::new);
         String first = arr[0];
         int len = first.length();
         for (int i = 1; i < arr.length; i++) {

@@ -565,7 +565,18 @@ public class Main {
 
             // --- jobs ---
             if (command.equals("jobs")) {
-                // empty implementation for now — no background jobs to report
+                for (int j = 0; j < bgJobs.size(); j++) {
+                    Process proc = bgProcesses.get(j);
+                    if (proc.isAlive()) {
+                        long[] info = bgJobs.get(j);
+                        int jobNum = (int) info[0];
+                        String cmd = bgCommands.get(j);
+                        // format: [N]+  Running                 cmd &
+                        // "Running" is 7 chars, padded to 24 total → 17 trailing spaces
+                        String status = String.format("%-24s", "Running");
+                        System.out.println("[" + jobNum + "]+  " + status + cmd + " &");
+                    }
+                }
                 continue;
             }
 

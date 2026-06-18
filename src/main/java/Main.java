@@ -225,10 +225,32 @@ public class Main {
                         proc.waitFor();
                         String output = new String(proc.getInputStream().readAllBytes()).trim();
                         if (!output.isEmpty()) {
-                            for (String candidate : output.split("\n")) {
-                                candidate = candidate.trim();
-                                if (!candidate.isEmpty()) {
-                                    candidates.add(new Candidate(candidate));
+                            // collect and sort candidates
+                            List<String> cands = new java.util.ArrayList<>();
+                            for (String c : output.split("\n")) {
+                                c = c.trim();
+                                if (!c.isEmpty()) cands.add(c);
+                            }
+                            java.util.Collections.sort(cands);
+
+                            if (cands.size() == 1) {
+                                // unique match → complete with trailing space
+                                candidates.add(new Candidate(cands.get(0)));
+                            } else {
+                                // multiple matches → bell on first TAB, list on second
+                                String cacheKey = "script:" + cmdName + ":" + word;
+                                if (!cacheKey.equals(lastBelledWord)) {
+                                    ringBell(reader);
+                                    lastBelledWord = cacheKey;
+                                } else {
+                                    lastBelledWord = null;
+                                    String matchLine = String.join("  ", cands);
+                                    terminal.writer().print("\r\n" + matchLine + "\r\n");
+                                    terminal.writer().flush();
+                                    terminal.writer().print("$ " + line.line());
+                                    terminal.writer().flush();
+                                    for (String c : cands)
+                                        candidates.add(new Candidate(c, c, null, null, null, null, false));
                                 }
                             }
                         } else {

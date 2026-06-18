@@ -14,6 +14,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
@@ -23,6 +25,9 @@ public class Main {
             Set.of("echo", "exit", "type", "pwd", "cd", "complete"));
 
     private static String currentDir = System.getProperty("user.dir");
+
+    // stores registrations from: complete -C <script> <command>
+    private static final Map<String, String> completionSpecs = new HashMap<>();
 
     // shared reference so the completer can access the terminal
     private static Terminal terminal;
@@ -433,11 +438,24 @@ public class Main {
 
             // --- complete ---
             if (command.equals("complete")) {
-                if (tokens.size() >= 3 && tokens.get(1).equals("-p")) {
+                if (tokens.size() >= 4 && tokens.get(1).equals("-C")) {
+                    // complete -C <script> <cmdName>  → register
+                    String script  = tokens.get(2);
+                    String cmdName = tokens.get(3);
+                    completionSpecs.put(cmdName, script);
+                } else if (tokens.size() >= 3 && tokens.get(1).equals("-p")) {
+                    // complete -p <cmdName>  → print registration or error
                     String cmdName = tokens.get(2);
-                    String err = "complete: " + cmdName + ": no completion specification\n";
-                    if (redir.stderrFile != null) writeToFile(redir.stderrFile, redir.appendStderr, err);
-                    else System.out.print(err);
+                    String out;
+                    if (completionSpecs.containsKey(cmdName)) {
+                        out = "complete -C '" + completionSpecs.get(cmdName) + "' " + cmdName + "\n";
+                        if (redir.stdoutFile != null) writeToFile(redir.stdoutFile, redir.appendStdout, out);
+                        else { System.out.print(out); System.out.flush(); }
+                    } else {
+                        out = "complete: " + cmdName + ": no completion specification\n";
+                        if (redir.stderrFile != null) writeToFile(redir.stderrFile, redir.appendStderr, out);
+                        else { System.out.print(out); System.out.flush(); }
+                    }
                 }
                 continue;
             }

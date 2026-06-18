@@ -186,28 +186,41 @@ public class Main {
             String word = line.word();
             int wordIndex = line.wordIndex(); // 0 = command name, >0 = argument
 
-            // argument position → complete filenames in currentDir
+            // argument position → complete filenames (supports nested paths)
             if (wordIndex > 0) {
+                // split "path/to/f" into dirPart="path/to/" and prefix="f"
+                int lastSlash = word.lastIndexOf('/');
+                String dirPart  = lastSlash >= 0 ? word.substring(0, lastSlash + 1) : "";
+                String prefix   = lastSlash >= 0 ? word.substring(lastSlash + 1)    : word;
+
+                // resolve the search directory against currentDir
+                File searchDir = dirPart.isEmpty()
+                        ? new File(currentDir)
+                        : new File(currentDir, dirPart);
+
                 Set<String> fileMatches = new TreeSet<>();
-                File dir = new File(currentDir);
-                File[] files = dir.listFiles();
+                File[] files = searchDir.listFiles();
                 if (files != null) {
                     for (File f : files) {
-                        if (f.getName().startsWith(word)) {
-                            String name = f.isDirectory() ? f.getName() + "/" : f.getName();
-                            fileMatches.add(name);
+                        if (f.getName().startsWith(prefix)) {
+                            // rebuild the full token: dirPart + matched name (+ / for dirs)
+                            String completed = dirPart + f.getName()
+                                    + (f.isDirectory() ? "/" : "");
+                            fileMatches.add(completed);
                         }
                     }
                 }
+
                 if (fileMatches.isEmpty()) {
                     ringBell(reader);
                     return;
                 }
                 if (fileMatches.size() == 1) {
+                    // unique match → complete with trailing space
                     candidates.add(new Candidate(fileMatches.iterator().next()));
                     return;
                 }
-                // multiple file matches → extend to LCP, otherwise bell
+                // multiple matches → extend to LCP, otherwise bell
                 String lcp = longestCommonPrefix(fileMatches);
                 if (lcp.length() > word.length()) {
                     candidates.add(new Candidate(lcp, lcp, null, null, null, null, false));

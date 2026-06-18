@@ -29,6 +29,12 @@ public class Main {
     // stores registrations from: complete -C <script> <command>
     private static final Map<String, String> completionSpecs = new HashMap<>();
 
+    // background jobs tracking
+    private static final List<long[]> bgJobs = new ArrayList<>();        // [jobNum, pid]
+    private static final List<Process> bgProcesses = new ArrayList<>();  // parallel list
+    private static final List<String> bgCommands = new ArrayList<>();    // parallel list
+    private static int nextJobNum = 1;
+
     // shared reference so the completer can access the terminal
     private static Terminal terminal;
 
@@ -472,6 +478,14 @@ public class Main {
             List<String> tokens = tokenize(line);
             if (tokens.isEmpty()) continue;
 
+            // check for background (&) before redirection parsing
+            boolean background = false;
+            if (!tokens.isEmpty() && tokens.get(tokens.size() - 1).equals("&")) {
+                background = true;
+                tokens.remove(tokens.size() - 1);
+            }
+            if (tokens.isEmpty()) continue;
+
             Redirection redir = new Redirection();
             tokens = extractRedirections(tokens, redir);
             if (tokens.isEmpty()) continue;
@@ -592,7 +606,16 @@ public class Main {
                 if (redir.stderrFile == null)  pb.redirectError(ProcessBuilder.Redirect.INHERIT);
                 applyRedirections(pb, redir);
                 Process process = pb.start();
-                process.waitFor();
+                if (background) {
+                    int jobNum = nextJobNum++;
+                    long pid = process.pid();
+                    bgJobs.add(new long[]{jobNum, pid});
+                    bgProcesses.add(process);
+                    bgCommands.add(String.join(" ", tokens));
+                    System.out.println("[" + jobNum + "] " + pid);
+                } else {
+                    process.waitFor();
+                }
                 continue;
             }
 

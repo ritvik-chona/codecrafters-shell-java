@@ -522,6 +522,78 @@ public class Main {
             }
             if (tokens.isEmpty()) continue;
 
+            // Split into pipeline
+            List<List<String>> pipelineTokens = new ArrayList<>();
+            List<String> currentCmdTokens = new ArrayList<>();
+            for (String t : tokens) {
+                if (t.equals("|")) {
+                    if (!currentCmdTokens.isEmpty()) pipelineTokens.add(currentCmdTokens);
+                    currentCmdTokens = new ArrayList<>();
+                } else {
+                    currentCmdTokens.add(t);
+                }
+            }
+            if (!currentCmdTokens.isEmpty()) pipelineTokens.add(currentCmdTokens);
+
+            if (pipelineTokens.size() > 1) {
+                List<ProcessBuilder> builders = new ArrayList<>();
+                List<String> pipelineCmds = new ArrayList<>();
+                boolean valid = true;
+
+                for (int i = 0; i < pipelineTokens.size(); i++) {
+                    List<String> stageTokens = pipelineTokens.get(i);
+                    Redirection redir = new Redirection();
+                    stageTokens = extractRedirections(stageTokens, redir);
+                    if (stageTokens.isEmpty()) { valid = false; break; }
+                    
+                    String cmdName = stageTokens.get(0);
+                    File executable = findExecutable(cmdName);
+                    if (executable == null) {
+                        System.out.println(cmdName + ": command not found");
+                        valid = false; break;
+                    }
+                    
+                    ProcessBuilder pb = new ProcessBuilder(stageTokens);
+                    pb.directory(new File(currentDir));
+                    
+                    if (i == 0) pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
+                    if (i == pipelineTokens.size() - 1 && redir.stdoutFile == null) pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+                    if (redir.stderrFile == null) pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+
+                    applyRedirections(pb, redir);
+                    builders.add(pb);
+                    pipelineCmds.add(String.join(" ", stageTokens));
+                }
+
+                if (!valid) continue;
+
+                List<Process> processes = ProcessBuilder.startPipeline(builders);
+                Process lastProcess = processes.get(processes.size() - 1);
+
+                if (background) {
+                    int jobNum = 1;
+                    int insertIdx = 0;
+                    for (int j = 0; j < bgJobs.size(); j++) {
+                        if ((int)bgJobs.get(j)[0] == jobNum) {
+                            jobNum++;
+                            insertIdx++;
+                        } else {
+                            break;
+                        }
+                    }
+                    long pid = lastProcess.pid();
+                    bgJobs.add(insertIdx, new long[]{jobNum, pid});
+                    bgProcesses.add(insertIdx, lastProcess);
+                    bgCommands.add(insertIdx, String.join(" | ", pipelineCmds));
+                    System.out.println("[" + jobNum + "] " + pid);
+                } else {
+                    lastProcess.waitFor();
+                }
+                continue;
+            }
+
+            // --- Single command execution ---
+            tokens = pipelineTokens.get(0);
             Redirection redir = new Redirection();
             tokens = extractRedirections(tokens, redir);
             if (tokens.isEmpty()) continue;

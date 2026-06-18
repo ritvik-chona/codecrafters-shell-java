@@ -577,8 +577,19 @@ public class Main {
             Object item = resolved.get(idx);
 
             if (item instanceof byte[]) {
-                // builtin output — buffer it for the next stage
-                pendingInput = (byte[]) item;
+                byte[] builtinOut = (byte[]) item;
+                // builtins don't consume stdin — discard any pending input from
+                // a prior external stage (e.g. "ls | type exit": ls output is ignored)
+                pendingInput = null;
+
+                if (idx + 1 >= resolved.size()) {
+                    // last stage is a builtin — print its output directly
+                    System.out.write(builtinOut);
+                    System.out.flush();
+                } else {
+                    // middle builtin — its output feeds the next stage
+                    pendingInput = builtinOut;
+                }
                 idx++;
                 continue;
             }

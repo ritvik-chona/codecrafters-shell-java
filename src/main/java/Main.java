@@ -506,10 +506,13 @@ public class Main {
         while (true) {
             String line;
             try {
+                Thread.sleep(25);
                 String doneJobs = checkJobs(false);
                 if (!doneJobs.isEmpty()) System.out.print(doneJobs);
                 line = reader.readLine("$ ");
             } catch (org.jline.reader.EndOfFileException | org.jline.reader.UserInterruptException e) {
+                break;
+            } catch (InterruptedException e) {
                 break;
             }
             if (line == null) break;

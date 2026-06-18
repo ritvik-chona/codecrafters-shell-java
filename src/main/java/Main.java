@@ -226,12 +226,28 @@ public class Main {
                     }
                     return;
                 }
-                // multiple matches → extend to LCP, otherwise bell
+                // multiple matches → try LCP extension first
                 String lcp = longestCommonPrefix(fileMatches);
                 if (lcp.length() > word.length()) {
+                    // can extend to common prefix — do so without trailing space
                     candidates.add(new Candidate(lcp, lcp, null, null, null, null, false));
-                } else {
+                    lastBelledWord = null;
+                    return;
+                }
+                // already at LCP — first TAB rings bell, second TAB lists all matches
+                if (!word.equals(lastBelledWord)) {
                     ringBell(reader);
+                    lastBelledWord = word;
+                } else {
+                    lastBelledWord = null;
+                    // print sorted matches on a new line, then reprint prompt + input
+                    String matchLine = String.join("  ", fileMatches);
+                    terminal.writer().print("\r\n" + matchLine + "\r\n");
+                    terminal.writer().flush();
+                    terminal.writer().print("$ " + line.line());
+                    terminal.writer().flush();
+                    // add candidates so JLine redraws the input line cleanly
+                    for (String m : fileMatches) candidates.add(new Candidate(m, m, null, null, null, null, false));
                 }
                 return;
             }

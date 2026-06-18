@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 public class Main {
 
@@ -20,6 +21,9 @@ public class Main {
             Set.of("echo", "exit", "type", "pwd", "cd"));
 
     private static String currentDir = System.getProperty("user.dir");
+
+    // shared reference so the completer can access the terminal
+    private static Terminal terminal;
 
     private static class Redirection {
         String stdoutFile  = null;
@@ -37,18 +41,15 @@ public class Main {
 
         while (i < line.length()) {
             char c = line.charAt(i);
-
             if (c == '\\') {
                 i++;
                 if (i < line.length()) { current.append(line.charAt(i)); i++; }
-
             } else if (c == '\'') {
                 i++;
                 while (i < line.length() && line.charAt(i) != '\'') {
                     current.append(line.charAt(i)); i++;
                 }
                 i++;
-
             } else if (c == '"') {
                 i++;
                 while (i < line.length() && line.charAt(i) != '"') {
@@ -61,11 +62,9 @@ public class Main {
                     } else { current.append(d); i++; }
                 }
                 i++;
-
             } else if (c == ' ' || c == '\t') {
                 if (current.length() > 0) { tokens.add(current.toString()); current.setLength(0); }
                 i++;
-
             } else { current.append(c); i++; }
         }
 
@@ -97,19 +96,25 @@ public class Main {
         if (redir.stdoutFile != null) {
             File f = new File(redir.stdoutFile);
             if (f.getParentFile() != null) f.getParentFile().mkdirs();
-            pb.redirectOutput(redir.appendStdout ? ProcessBuilder.Redirect.appendTo(f) : ProcessBuilder.Redirect.to(f));
+            pb.redirectOutput(redir.appendStdout
+                    ? ProcessBuilder.Redirect.appendTo(f)
+                    : ProcessBuilder.Redirect.to(f));
         }
         if (redir.stderrFile != null) {
             File f = new File(redir.stderrFile);
             if (f.getParentFile() != null) f.getParentFile().mkdirs();
-            pb.redirectError(redir.appendStderr ? ProcessBuilder.Redirect.appendTo(f) : ProcessBuilder.Redirect.to(f));
+            pb.redirectError(redir.appendStderr
+                    ? ProcessBuilder.Redirect.appendTo(f)
+                    : ProcessBuilder.Redirect.to(f));
         }
     }
 
     private static void writeToFile(String path, boolean append, String content) throws Exception {
         File f = new File(path);
         if (f.getParentFile() != null) f.getParentFile().mkdirs();
-        try (PrintStream ps = new PrintStream(new FileOutputStream(f, append))) { ps.print(content); }
+        try (PrintStream ps = new PrintStream(new FileOutputStream(f, append))) {
+            ps.print(content);
+        }
     }
 
     private static void touchFile(String path, boolean append) throws Exception {
@@ -131,35 +136,106 @@ public class Main {
         return null;
     }
 
-    // ── Tab completer ────────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static class ShellCompleter implements Completer {
-        @Override
-        public void complete(LineReader reader, ParsedLine line, List<Candidate> candidates) {
-            String word = line.word(); // what the user has typed so far
-
-            // complete builtin names
-            for (String b : builtins) {
-                if (b.startsWith(word)) {
-                    candidates.add(new Candidate(b));
-                }
-            }
-
-            // complete external executables found in PATH
-            String pathEnv = System.getenv("PATH");
-            if (pathEnv != null) {
-                for (String dir : pathEnv.split(File.pathSeparator)) {
-                    File d = new File(dir);
-                    if (!d.isDirectory()) continue;
-                    File[] files = d.listFiles();
-                    if (files == null) continue;
-                    for (File f : files) {
-                        if (f.canExecute() && !f.isDirectory() && f.getName().startsWith(word)) {
-                            candidates.add(new Candidate(f.getName()));
-                        }
+    private static Set<String> collectMatches(String word) {
+        Set<String> matches = new TreeSet<>();
+        for (String b : builtins) {
+            if (b.startsWith(word)) matches.add(b);
+        }
+        String pathEnv = System.getenv("PATH");
+        if (pathEnv != null) {
+            for (String dir : pathEnv.split(File.pathSeparator)) {
+                File d = new File(dir);
+                if (!d.isDirectory()) continue;
+                File[] files = d.listFiles();
+                if (files == null) continue;
+                for (File f : files) {
+                    if (f.canExecute() && !f.isDirectory() && f.getName().startsWith(word)) {
+                        matches.add(f.getName());
                     }
                 }
             }
+        }
+        return matches;
+    }
+
+    private static String longestCommonPrefix(Set<String> words) {
+        String[] arr = words.toArray(new String[0]);
+        String first = arr[0];
+        int len = first.length();
+        for (int i = 1; i < arr.length; i++) {
+            len = Math.min(len, arr[i].length());
+            for (int j = 0; j < len; j++) {
+                if (first.charAt(j) != arr[i].charAt(j)) { len = j; break; }
+            }
+        }
+        return first.substring(0, len);
+    }
+
+    // ── Tab completer ────────────────────────────────────────────────────────
+
+    private static class ShellCompleter implements Completer {
+
+        // tracks whether we already rang the bell for this exact word
+        // so the second TAB shows the list instead of ringing again
+        private String lastBelledWord = null;
+
+        @Override
+        public void complete(LineReader reader, ParsedLine line, List<Candidate> candidates) {
+            String word = line.word();
+            Set<String> matches = collectMatches(word);
+
+            if (matches.isEmpty()) {
+                // no matches at all → bell, leave input unchanged
+                ringBell(reader);
+                lastBelledWord = null;
+                return;
+            }
+
+            if (matches.size() == 1) {
+                // unique match → complete it
+                candidates.add(new Candidate(matches.iterator().next()));
+                lastBelledWord = null;
+                return;
+            }
+
+            // multiple matches
+            String lcp = longestCommonPrefix(matches);
+
+            if (lcp.length() > word.length()) {
+                // can extend to the common prefix — do that first
+                candidates.add(new Candidate(lcp));
+                lastBelledWord = null;
+                return;
+            }
+
+            // already at the LCP — first TAB rings bell, second TAB shows list
+            if (!word.equals(lastBelledWord)) {
+                // first time here for this word: ring bell
+                ringBell(reader);
+                lastBelledWord = word;
+            } else {
+                // second TAB: print matches, then reprint prompt + current input
+                lastBelledWord = null;
+                String matchLine = String.join("  ", matches);
+
+                // print the match list on a new line
+                terminal.writer().print("\r\n" + matchLine + "\r\n");
+                terminal.writer().flush();
+
+                // reprint the prompt and the partial input the user had typed
+                terminal.writer().print("$ " + word);
+                terminal.writer().flush();
+
+                // add candidates so JLine redraws the line properly after
+                for (String m : matches) candidates.add(new Candidate(m));
+            }
+        }
+
+        private void ringBell(LineReader reader) {
+            reader.getTerminal().writer().print("\007");
+            reader.getTerminal().writer().flush();
         }
     }
 
@@ -167,11 +243,13 @@ public class Main {
 
     public static void main(String[] args) throws Exception {
 
-        Terminal terminal = TerminalBuilder.builder().system(true).build();
+        terminal = TerminalBuilder.builder().system(true).build();
         LineReader reader = LineReaderBuilder.builder()
                 .terminal(terminal)
                 .completer(new ShellCompleter())
-                .option(LineReader.Option.DISABLE_EVENT_EXPANSION, true) // don't expand ! history
+                .option(LineReader.Option.DISABLE_EVENT_EXPANSION, true)
+                .option(LineReader.Option.AUTO_LIST, false)
+                .option(LineReader.Option.AUTO_MENU, false)
                 .build();
 
         while (true) {
@@ -218,7 +296,9 @@ public class Main {
                 touchFile(redir.stdoutFile, redir.appendStdout);
                 String path = tokens.size() > 1 ? tokens.get(1) : "~";
                 if (path.equals("~")) path = System.getenv("HOME");
-                File target = path.startsWith("/") ? new File(path) : new File(currentDir, path);
+                File target = path.startsWith("/")
+                        ? new File(path)
+                        : new File(currentDir, path);
                 if (target.exists() && target.isDirectory()) {
                     currentDir = target.getCanonicalPath();
                     touchFile(redir.stderrFile, redir.appendStderr);

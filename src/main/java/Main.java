@@ -33,7 +33,6 @@ public class Main {
     private static final List<long[]> bgJobs = new ArrayList<>();        // [jobNum, pid]
     private static final List<Process> bgProcesses = new ArrayList<>();  // parallel list
     private static final List<String> bgCommands = new ArrayList<>();    // parallel list
-    private static int nextJobNum = 1;
 
     // shared reference so the completer can access the terminal
     private static Terminal terminal;
@@ -644,11 +643,20 @@ public class Main {
                 applyRedirections(pb, redir);
                 Process process = pb.start();
                 if (background) {
-                    int jobNum = nextJobNum++;
+                    int jobNum = 1;
+                    int insertIdx = 0;
+                    for (int i = 0; i < bgJobs.size(); i++) {
+                        if ((int)bgJobs.get(i)[0] == jobNum) {
+                            jobNum++;
+                            insertIdx++;
+                        } else {
+                            break;
+                        }
+                    }
                     long pid = process.pid();
-                    bgJobs.add(new long[]{jobNum, pid});
-                    bgProcesses.add(process);
-                    bgCommands.add(String.join(" ", tokens));
+                    bgJobs.add(insertIdx, new long[]{jobNum, pid});
+                    bgProcesses.add(insertIdx, process);
+                    bgCommands.add(insertIdx, String.join(" ", tokens));
                     System.out.println("[" + jobNum + "] " + pid);
                 } else {
                     process.waitFor();

@@ -216,8 +216,14 @@ public class Main {
                     return;
                 }
                 if (fileMatches.size() == 1) {
-                    // unique match → complete with trailing space
-                    candidates.add(new Candidate(fileMatches.iterator().next()));
+                    String match = fileMatches.iterator().next();
+                    if (match.endsWith("/")) {
+                        // directory → trailing slash, NO trailing space (complete=false)
+                        candidates.add(new Candidate(match, match, null, null, null, null, false));
+                    } else {
+                        // file → complete with trailing space (default behaviour)
+                        candidates.add(new Candidate(match));
+                    }
                     return;
                 }
                 // multiple matches → extend to LCP, otherwise bell

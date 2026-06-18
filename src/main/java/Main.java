@@ -565,16 +565,34 @@ public class Main {
 
             // --- jobs ---
             if (command.equals("jobs")) {
+                int lastAlive = -1;
+                int secondLastAlive = -1;
+                for (int j = bgJobs.size() - 1; j >= 0; j--) {
+                    if (bgProcesses.get(j).isAlive()) {
+                        if (lastAlive == -1) {
+                            lastAlive = j;
+                        } else if (secondLastAlive == -1) {
+                            secondLastAlive = j;
+                            break;
+                        }
+                    }
+                }
                 for (int j = 0; j < bgJobs.size(); j++) {
                     Process proc = bgProcesses.get(j);
                     if (proc.isAlive()) {
                         long[] info = bgJobs.get(j);
                         int jobNum = (int) info[0];
                         String cmd = bgCommands.get(j);
+                        char marker = ' ';
+                        if (j == lastAlive) {
+                            marker = '+';
+                        } else if (j == secondLastAlive) {
+                            marker = '-';
+                        }
                         // format: [N]+  Running                 cmd &
                         // "Running" is 7 chars, padded to 24 total → 17 trailing spaces
                         String status = String.format("%-24s", "Running");
-                        System.out.println("[" + jobNum + "]+  " + status + cmd + " &");
+                        System.out.println("[" + jobNum + "]" + marker + "  " + status + cmd + " &");
                     }
                 }
                 continue;
